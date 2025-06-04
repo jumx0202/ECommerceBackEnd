@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通信管理API测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background: #409eff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover { background: #337ab7; }
+        .result {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .online { background: #d4edda; color: #155724; }
+        .offline { background: #d1ecf1; color: #0c5460; }
+        .busy { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 通信管理API测试</h1>
+        <p>测试通信管理后端API的连接和数据获取功能</p>
+        
+        <div>
+            <button class="btn" onclick="testConnection()">测试连接</button>
+            <button class="btn" onclick="loadContacts()">获取联系人</button>
+            <button class="btn" onclick="loadTemplates()">获取消息模板</button>
+            <button class="btn" onclick="loadQuickReplies()">获取快捷回复</button>
+            <button class="btn" onclick="sendTestMessage()">发送测试消息</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📞 联系人列表</h2>
+        <div id="contacts-result" class="result">点击"获取联系人"按钮加载数据...</div>
+    </div>
+
+    <div class="container">
+        <h2>💬 消息模板</h2>
+        <div id="templates-result" class="result">点击"获取消息模板"按钮加载数据...</div>
+    </div>
+
+    <div class="container">
+        <h2>⚡ 快捷回复</h2>
+        <div id="replies-result" class="result">点击"获取快捷回复"按钮加载数据...</div>
+    </div>
+
+    <div class="container">
+        <h2>📨 消息测试</h2>
+        <div id="message-result" class="result">点击"发送测试消息"按钮测试消息发送...</div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api/v1';
+        
+        // 模拟认证token（实际使用时应该从登录获取）
+        const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwibmFtZSI6IkFkbWluIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+
+        async function apiRequest(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${mockToken}`,
+                        ...options.headers
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API请求失败:', error);
+                throw error;
+            }
+        }
+
+        async function testConnection() {
+            try {
+                const result = document.getElementById('contacts-result');
+                result.innerHTML = '<span class="success">🔄 正在测试连接...</span>';
+                
+                const response = await fetch(`${API_BASE}/communication/contacts`);
+                
+                if (response.ok) {
+                    result.innerHTML = '<span class="success">✅ 连接成功！后端服务正常运行</span>';
+                } else {
+                    result.innerHTML = `<span class="error">❌ 连接失败: ${response.status} ${response.statusText}</span>`;
+                }
+            } catch (error) {
+                document.getElementById('contacts-result').innerHTML = 
+                    `<span class="error">❌ 连接失败: ${error.message}</span>`;
+            }
+        }
+
+        async function loadContacts() {
+            try {
+                const result = document.getElementById('contacts-result');
+                result.innerHTML = '<span class="success">🔄 正在加载联系人...</span>';
+                
+                const data = await apiRequest('/communication/contacts');
+                
+                if (data.contacts && data.contacts.length > 0) {
+                    let html = `<span class="success">✅ 成功获取 ${data.contacts.length} 个联系人</span>\n\n`;
+                    
+                    data.contacts.forEach(contact => {
+                        const statusClass = contact.status === 'online' ? 'online' : 
+                                          contact.status === 'busy' ? 'busy' : 'offline';
+                        html += `📧 ${contact.name} (${contact.role})`;
+                        html += `<span class="status ${statusClass}">${contact.status}</span>`;
+                        html += `\n   📞 ${contact.contact_info}`;
+                        if (contact.unread_count > 0) {
+                            html += ` | 🔴 ${contact.unread_count} 条未读`;
+                        }
+                        html += '\n\n';
+                    });
+                    
+                    result.innerHTML = html;
+                } else {
+                    result.innerHTML = '<span class="error">⚠️ 没有找到联系人数据</span>';
+                }
+            } catch (error) {
+                document.getElementById('contacts-result').innerHTML = 
+                    `<span class="error">❌ 加载失败: ${error.message}</span>`;
+            }
+        }
+
+        async function loadTemplates() {
+            try {
+                const result = document.getElementById('templates-result');
+                result.innerHTML = '<span class="success">🔄 正在加载消息模板...</span>';
+                
+                const data = await apiRequest('/communication/templates');
+                
+                if (data && data.length > 0) {
+                    let html = `<span class="success">✅ 成功获取 ${data.length} 个消息模板</span>\n\n`;
+                    
+                    data.forEach(template => {
+                        html += `📝 ${template.title}`;
+                        if (template.category) {
+                            html += ` [${template.category}]`;
+                        }
+                        html += `\n   "${template.content}"`;
+                        html += `\n   使用次数: ${template.usage_count}\n\n`;
+                    });
+                    
+                    result.innerHTML = html;
+                } else {
+                    result.innerHTML = '<span class="error">⚠️ 没有找到消息模板</span>';
+                }
+            } catch (error) {
+                document.getElementById('templates-result').innerHTML = 
+                    `<span class="error">❌ 加载失败: ${error.message}</span>`;
+            }
+        }
+
+        async function loadQuickReplies() {
+            try {
+                const result = document.getElementById('replies-result');
+                result.innerHTML = '<span class="success">🔄 正在加载快捷回复...</span>';
+                
+                const data = await apiRequest('/communication/quick-replies');
+                
+                if (data && data.length > 0) {
+                    let html = `<span class="success">✅ 成功获取 ${data.length} 个快捷回复</span>\n\n`;
+                    
+                    data.forEach((reply, index) => {
+                        html += `⚡ [${index + 1}] "${reply.text}"`;
+                        html += `\n   使用次数: ${reply.usage_count} | 排序: ${reply.sort_order}\n\n`;
+                    });
+                    
+                    result.innerHTML = html;
+                } else {
+                    result.innerHTML = '<span class="error">⚠️ 没有找到快捷回复</span>';
+                }
+            } catch (error) {
+                document.getElementById('replies-result').innerHTML = 
+                    `<span class="error">❌ 加载失败: ${error.message}</span>`;
+            }
+        }
+
+        async function sendTestMessage() {
+            try {
+                const result = document.getElementById('message-result');
+                result.innerHTML = '<span class="success">🔄 正在发送测试消息...</span>';
+                
+                // 首先获取联系人列表，选择第一个联系人发送消息
+                const contactsData = await apiRequest('/communication/contacts');
+                
+                if (!contactsData.contacts || contactsData.contacts.length === 0) {
+                    result.innerHTML = '<span class="error">❌ 没有可用的联系人</span>';
+                    return;
+                }
+                
+                const firstContact = contactsData.contacts[0];
+                
+                const messageData = {
+                    receiver_id: firstContact.contact_id,
+                    message_content: `测试消息 - ${new Date().toLocaleTimeString()}`,
+                    message_type: 'text'
+                };
+                
+                const data = await apiRequest('/communication/messages', {
+                    method: 'POST',
+                    body: JSON.stringify(messageData)
+                });
+                
+                let html = '<span class="success">✅ 消息发送成功！</span>\n\n';
+                html += `📨 消息ID: ${data.message_id}\n`;
+                html += `👤 发送给: ${data.receiver_name}\n`;
+                html += `💬 内容: "${data.message_content}"\n`;
+                html += `⏰ 发送时间: ${new Date(data.sent_at).toLocaleString()}\n`;
+                html += `📊 状态: ${data.status}`;
+                
+                result.innerHTML = html;
+            } catch (error) {
+                document.getElementById('message-result').innerHTML = 
+                    `<span class="error">❌ 发送失败: ${error.message}</span>`;
+            }
+        }
+
+        // 页面加载时自动测试连接
+        window.addEventListener('load', () => {
+            console.log('通信管理API测试页面已加载');
+            testConnection();
+        });
+    </script>
+</body>
+</html> 
